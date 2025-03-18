@@ -9,6 +9,7 @@ A Python script for analyzing and summarizing user license requirements in Dynam
 - Generates summaries of unique role combinations
 - Calculates required licenses for each combination
 - Creates a formatted Excel report with the results
+- Supports verbose output for detailed debugging information
 
 ## Prerequisites
 
@@ -25,9 +26,14 @@ pip install -r requirements.txt
 
 ## Usage
 
-Run the script with both the license report and roles file:
+Basic usage:
 ```bash
 python license_summary.py "License Report.xlsx" "Roles.xlsx"
+```
+
+For detailed debugging output, use the `-v` or `--verbose` flag:
+```bash
+python license_summary.py -v "License Report.xlsx" "Roles.xlsx"
 ```
 
 ### Input Files
@@ -55,4 +61,18 @@ The script generates a new Excel file with the following information:
 - Combined license requirements
 - Summary totals
 
-The output file will be named: `[original_filename]_summary.xlsx` 
+The output file will be named: `[original_filename]_summary.xlsx`
+
+### Verbose Mode
+
+When using the `-v` or `--verbose` flag, the script will provide detailed information including:
+- List of all available roles
+- Detailed user role assignments
+- Technical information about file processing
+- Step-by-step analysis progress
+
+This is particularly useful for:
+- Debugging issues
+- Verifying role assignments
+- Understanding the analysis process
+- Troubleshooting file format problems 

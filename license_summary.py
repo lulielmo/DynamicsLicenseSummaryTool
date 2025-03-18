@@ -4,10 +4,26 @@ import pandas as pd
 import re
 import os
 import sys
+import argparse
 from collections import Counter
 from openpyxl import load_workbook, Workbook
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 from pathlib import Path
+
+def log(message, verbose=False, always=False):
+    """
+    Utility function to handle logging messages.
+    Args:
+        message: The message to print
+        verbose: Whether this is a debug message that should only be shown in verbose mode
+        always: Whether to always show this message regardless of verbose setting
+    """
+    global VERBOSE
+    if always or (verbose and VERBOSE):
+        print(message)
+
+# Global verbose flag
+VERBOSE = False
 
 def load_roles_from_file(roles_file):
     """
@@ -17,7 +33,7 @@ def load_roles_from_file(roles_file):
     Columns B-F: License requirements (1 if required, empty if not)
     B: Finance, C: SCM, D: Commerce, E: Project, F: HR
     """
-    print(f"Reading roles from file: {roles_file}")
+    log(f"Reading roles from file: {roles_file}", verbose=True)
     try:
         df = pd.read_excel(roles_file)
         roles = {}
@@ -36,10 +52,9 @@ def load_roles_from_file(roles_file):
             }
             roles[str(role)] = licenses
         
-        print(f"Found {len(roles)} roles in the roles file")
         return roles
     except Exception as e:
-        print(f"Error reading roles file: {e}")
+        log(f"Error reading roles file: {e}", always=True)
         return {}
 
 def extract_roles(excel_file, roles_file):
@@ -51,41 +66,31 @@ def extract_roles(excel_file, roles_file):
         # Read roles from file
         target_roles = load_roles_from_file(roles_file)
         if not target_roles:
-            print("Error: No roles found in the roles file. Please check the file format.")
+            log("Error: No roles found in the roles file. Please check the file format.", always=True)
             return [], {}, {}
             
-        print("\nAvailable roles:")
-        for role in target_roles:
-            print(f"- {role}")
+        log(f"Found {len(target_roles)} roles in roles file", always=True)
         
-        print("\nAnalyzing Excel file structure...")
+        log("\nAvailable roles:", verbose=True)
+        for role in target_roles:
+            log(f"- {role}", verbose=True)
+        
+        log("\nAnalyzing file...", always=True)
         # Read the Excel file using openpyxl to handle locked rows
         wb = load_workbook(excel_file, read_only=True, data_only=True)
         sheet = wb.active
         
-        print(f"\nTotal rows in sheet: {sheet.max_row}")
-        print(f"Total columns in sheet: {sheet.max_column}")
-        
         # Convert to pandas DataFrame for easier processing, skipping the first 19 rows
         data = []
-        print("\nReading rows starting from row 20:")
         row_count = 0
         for row in sheet.iter_rows(min_row=20, values_only=True):
             row_count += 1
-            if row_count <= 5:  # Print first 5 rows for debugging
-                print(f"Row {row_count}: {row}")
             data.append(row)
         
-        print(f"\nTotal rows read: {row_count}")
-        
         df = pd.DataFrame(data)
-        print("\nDataFrame Info:")
-        print(df.info())
-        print("\nFirst few rows of DataFrame:")
-        print(df.head())
         
         if len(df) == 0:
-            print("Error: No data found after skipping header rows")
+            log("Error: No data found after skipping header rows", always=True)
             return [], {}, {}
         
         # Dictionary to store role combinations and their counts
@@ -99,37 +104,28 @@ def extract_roles(excel_file, roles_file):
         user_roles = {}
         current_user = None
         
-        print("\nProcessing rows:")
         # Process each row
         i = 0
         while i < len(df):
             row = df.iloc[i]
             
-            # Debug print for first few rows
-            if i < 5:
-                print(f"\nProcessing row {i}:")
-                print(f"First column value: '{row.iloc[3]}'")
-                print(f"Row values: {row.values}")
-            
             # Check if this is a user header row (Alias is in column 3)
             if isinstance(row.iloc[3], str) and row.iloc[3].strip() == "Alias":
-                print(f"\nFound Alias header at row {i}")
+                log(f"\nFound Alias header at row {i}", verbose=True)
                 # User data is in the next row
                 if i + 1 < len(df):
                     user_row = df.iloc[i + 1]
                     current_user = str(user_row.iloc[3])
                     if current_user not in user_roles:
                         user_roles[current_user] = set()
-                        print(f"Found user: {current_user}")
+                        log(f"Found user: {current_user}", verbose=True)
                     
                     # Skip to security role headers (2 rows down)
                     i += 2
                     if i < len(df):
                         role_header_row = df.iloc[i]
-                        if isinstance(role_header_row.iloc[5], str):
-                            print(f"Column 6 value at role header row: '{role_header_row.iloc[5]}'")
                         if isinstance(role_header_row.iloc[5], str) and role_header_row.iloc[5].strip() == "Security Role":
-                            print("Found Security Role header")
+                            log("Found Security Role header", verbose=True)
                             # Read roles from next row(s) until we hit another user or end of file
                             i += 1
                             while i < len(df):
@@ -145,18 +141,18 @@ def extract_roles(excel_file, roles_file):
                                     if not pd.isna(security_role) and security_role != "nan":
                                         # Split roles and filter based on target roles
                                         roles = [r.strip() for r in security_role.split(',')]
-                                        print(f"Found roles for {current_user}: {roles}")
+                                        log(f"Found roles for {current_user}: {roles}", verbose=True)
                                         matching_roles = [r for r in roles if r in target_roles]
                                         if matching_roles:
-                                            print(f"Matching roles: {matching_roles}")
+                                            log(f"Matching roles: {matching_roles}", verbose=True)
                                             user_roles[current_user].update(matching_roles)
                                 i += 1
             i += 1
         
-        print("\nFound users with roles:")
+        log("\nFound users with roles:", verbose=True)
         for user, roles in user_roles.items():
             if roles:
-                print(f"{user}: {roles}")
+                log(f"{user}: {roles}", verbose=True)
         
         # Process unique role combinations for each user
         for user, roles in user_roles.items():
@@ -201,15 +197,15 @@ def extract_roles(excel_file, roles_file):
         # Sort results by count (descending)
         sorted_combinations = sorted(role_counts.items(), key=lambda x: x[1], reverse=True)
         
-        print(f"\nFound {len(role_counts)} unique role combinations")
-        print(f"Total users with matching roles: {sum(role_counts.values())}")
+        log(f"\nFound {len(role_counts)} unique role combinations", always=True)
+        log(f"Total users with matching roles: {sum(role_counts.values())}", always=True)
         
         wb.close()  # Close the workbook
         return sorted_combinations, license_requirements, combination_types
         
     except Exception as e:
-        print(f"Error processing Excel file: {e}")
-        print(f"Error details:", e.__class__.__name__)
+        log(f"Error processing Excel file: {e}", always=True)
+        log(f"Error details: {e.__class__.__name__}", always=True)
         import traceback
         traceback.print_exc()
         return [], {}, {}
@@ -342,26 +338,36 @@ def write_results_to_excel_file(results, output_file):
     
     # Save workbook
     wb.save(output_file)
-    print(f"\nResults written to: {output_file}")
+    log(f"\nResults written to: {output_file}", always=True)
 
 def main():
-    if len(sys.argv) != 3:
-        print("Usage: python license_summary.py <excel_file> <roles_file>")
-        print("Example: python license_summary.py 'License Report.xlsx' 'Roles.xlsx'")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(description='Analyze Dynamics 365 license requirements based on user roles.')
+    parser.add_argument('excel_file', help='The Excel file containing the license report')
+    parser.add_argument('roles_file', help='The Excel file containing role definitions and license requirements')
+    parser.add_argument('-v', '--verbose', action='store_true', help='Enable verbose output for debugging')
     
-    excel_file = sys.argv[1]
-    roles_file = sys.argv[2]
+    args = parser.parse_args()
     
-    print(f"Processing file: {excel_file}")
-    print(f"Using roles from: {roles_file}")
+    global VERBOSE
+    VERBOSE = args.verbose
     
-    results = extract_roles(excel_file, roles_file)
+    if not os.path.exists(args.excel_file):
+        log(f"Error: File not found: {args.excel_file}", always=True)
+        return
+    
+    if not os.path.exists(args.roles_file):
+        log(f"Error: File not found: {args.roles_file}", always=True)
+        return
+    
+    log(f"Processing file: {args.excel_file}", always=True)
+    log(f"Using roles from: {args.roles_file}", always=True)
+    
+    results = extract_roles(args.excel_file, args.roles_file)
     if results[0]:  # If we have any results
-        output_file = create_output_filename(excel_file)
+        output_file = create_output_filename(args.excel_file)
         write_results_to_excel_file(results, output_file)
     else:
-        print("No matching roles found in the file.")
+        log("No matching roles found in the file.", always=True)
 
 if __name__ == "__main__":
     main() 
