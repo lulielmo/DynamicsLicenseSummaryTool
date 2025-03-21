@@ -52,7 +52,8 @@ python license_summary.py -v "License Report.xlsx" "Roles.xlsx"
      - Column D: Commerce license (1 if required)
      - Column E: Project license (1 if required)
      - Column F: HR license (1 if required)
-
+>[!TIP]
+>Refer to the [Wiki](https://github.com/lulielmo/DynamicsLicenseSummaryTool/wiki) to learn more about the input files.
 ### Output
 
 The script generates a new Excel file with the following information:
